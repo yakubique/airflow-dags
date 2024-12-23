@@ -1,0 +1,142 @@
+# PIPELINE DEFINITION
+# Name: shikimori-etl-pipeline
+components:
+  comp-grab-boundaries:
+    executorLabel: exec-grab-boundaries
+    outputDefinitions:
+      artifacts:
+        output_list_path:
+          artifactType:
+            schemaTitle: system.Artifact
+            schemaVersion: 0.0.1
+  comp-print-json:
+    executorLabel: exec-print-json
+    inputDefinitions:
+      artifacts:
+        input_path:
+          artifactType:
+            schemaTitle: system.Artifact
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-grab-boundaries:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - grab_boundaries
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.11.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'requests==2.32.3'\
+          \ 'jsonlines==4.0.0' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef grab_boundaries(output_list_path: dsl.OutputPath(\"jsonl\")):\n\
+          \    page_size = 50\n    base_url = \"https://shikimori.one\"\n    base_headers\
+          \ = {\n        \"Content-Type\": \"application/json\",\n        \"Accept\"\
+          : \"application/json\",\n        \"User-Agent\": \"Api Test\",\n    }\n\n\
+          \    from dataclasses import dataclass, fields\n\n    @dataclass\n    class\
+          \ PoorAnime(object):\n        id: int\n        name: str\n        russian:\
+          \ str\n        image: dict\n        url: str\n        kind: str\n      \
+          \  score: str\n        status: str\n        episodes: int\n        episodes_aired:\
+          \ int\n        aired_on: str\n        released_on: str\n\n        @classmethod\n\
+          \        def from_json(cls, data: dict):\n            keys = [f.name for\
+          \ f in fields(cls)]\n\n            return cls(**{k: data.get(k) for k in\
+          \ keys})\n\n    import json\n\n    import requests\n    from requests.adapters\
+          \ import HTTPAdapter, Retry\n\n    def json_get(url: str, headers: dict)\
+          \ -> str:\n        # https://stackoverflow.com/a/35636367\n        session\
+          \ = requests.Session()\n        retries = Retry(\n            total=5, backoff_factor=2,\
+          \ status_forcelist=[429, 500, 502, 503, 504]\n        )\n        session.mount(\"\
+          https://\", HTTPAdapter(max_retries=retries))\n\n        req = session.get(url,\
+          \ headers=headers)\n\n        if req.status_code >= 200 and req.status_code\
+          \ < 400:\n            try:\n                j = req.json()\n           \
+          \ except json.JSONDecodeError:\n                print(\"Error decoding JSON\"\
+          , req.text)\n                return None\n\n            return json.dumps(j)\n\
+          \n        return None\n\n    start_url = f\"{base_url}/api/animes?order=id&limit=1&page=0\"\
+          \n    end_url = f\"{base_url}/api/animes?order=id_desc&limit=1&page=0\"\n\
+          \n    start_data = json_get(start_url, base_headers)\n    end_data = json_get(end_url,\
+          \ base_headers)\n\n    start_anime = PoorAnime.from_json(json.loads(start_data)[0])\n\
+          \    end_anime = PoorAnime.from_json(json.loads(end_data)[0])\n\n    to_go\
+          \ = end_anime.id - start_anime.id\n    pages = to_go // page_size + 1\n\n\
+          \    import jsonlines\n\n    with jsonlines.open(output_list_path, \"w\"\
+          ) as writer:\n        for i in range(pages):\n            page_url = f\"\
+          {base_url}/api/animes?order=id&limit={page_size}&page={i}\"\n          \
+          \  print(\"Getting page\", i, \"of\", pages)\n\n            page_data =\
+          \ json_get(page_url, base_headers)\n            page_json = json.loads(page_data)\n\
+          \n            for anime in page_json:\n                writer.write(anime)\n\
+          \n"
+        image: python:3.11
+    exec-print-json:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - print_json
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.11.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef print_json(input_path: dsl.InputPath(\"json\")):\n    # NOTE:\
+          \ this is just path, not the actual data\n    print(input_path)\n    with\
+          \ open(input_path, \"r\") as f:\n        print(f.read())\n\n"
+        image: python:3.11
+pipelineInfo:
+  name: shikimori-etl-pipeline
+root:
+  dag:
+    tasks:
+      grab-boundaries:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-grab-boundaries
+        taskInfo:
+          name: grab-boundaries
+      print-json:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-print-json
+        dependentTasks:
+        - grab-boundaries
+        inputs:
+          artifacts:
+            input_path:
+              taskOutputArtifact:
+                outputArtifactKey: output_list_path
+                producerTask: grab-boundaries
+        taskInfo:
+          name: print-json
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.11.0
