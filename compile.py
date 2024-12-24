@@ -1,7 +1,7 @@
 from pathlib import Path
 
-import kfp
-from kfp.compiler import Compiler
+import kfp  # pylint: disable=import-error
+from kfp.compiler import Compiler  # pylint: disable=import-error
 from pipelines.shikimori_etl import shikimori_etl_pipeline
 from pipelines.test import test_pipeline
 
@@ -16,4 +16,7 @@ Compiler().compile(shikimori_etl_pipeline, str(output_dir / "shikimori_etl.yaml"
 client = kfp.Client(
     host="https://kubeflow.local.opa-oz.live"
 )  # Connects to the KFP instance
-client.create_run_from_pipeline_package(str(output_dir / "shikimori_etl.yaml"))
+
+# client.create_run_from_pipeline_package(
+#     str(output_dir / "shikimori_etl.yaml"), arguments={"is_testing": True}
+# )

@@ -1,5 +1,6 @@
 # PIPELINE DEFINITION
 # Name: test-pipeline
+# Description: A simple test pipeline
 # Inputs:
 #    recipient: str
 # Outputs:
@@ -47,6 +48,8 @@ deploymentSpec:
           \n    print(hello_text)\n\n    return hello_text\n\n"
         image: python:3.11
 pipelineInfo:
+  description: A simple test pipeline
+  displayName: Test Pipeline
   name: test-pipeline
 root:
   dag:
